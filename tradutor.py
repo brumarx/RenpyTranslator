@@ -5,8 +5,9 @@ import os
 import sys
 import shutil
 import subprocess
+import re
 
-# Auto-install de dependências
+# ---------------- AUTO-INSTALL ---------------- #
 def auto_install(package):
     try:
         __import__(package)
@@ -20,7 +21,7 @@ auto_install("unrpa")
 from deep_translator import GoogleTranslator
 import unrpa
 
-# Configurações
+# ---------------- CONFIGURAÇÕES ---------------- #
 GAME_DIR = "game"
 BACKUP_DIR = "game_backup"
 TL_DIR = os.path.join(GAME_DIR, "tl", "portuguese")
@@ -55,63 +56,107 @@ def unprotect():
         unrpa.extract(os.path.join(GAME_DIR, f), GAME_DIR)
     print("✅ Desproteção concluída")
 
-def translate_file(src, dst, lang="pt"):
-    with open(src, "r", encoding="utf-8") as f:
-        content = f.read()
-    translator = GoogleTranslator(source='auto', target=lang)
-    try:
-        translated = translator.translate_batch(content.splitlines())
-        translated_text = "\n".join(translated)
-    except Exception as e:
-        print(f"⚠ Erro a traduzir {src}: {e}")
-        translated_text = content
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    with open(dst, "w", encoding="utf-8") as f:
-        f.write(translated_text)
-    print(f"✔ Traduzido com segurança: {os.path.relpath(dst, GAME_DIR)}")
+# ---------------- TRADUÇÃO INTELIGENTE ---------------- #
+def intelligent_translate_line(line, translator):
+    """
+    Traduz apenas strings/dialog de forma segura.
+    Ignora:
+    - Linhas de código Python ou Ren'Py complexas
+    - f-strings e renpy.notify(f"...")
+    """
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return line
 
-def safe_translate(lang="pt"):
+    # Ignorar linhas que parecem código Python/Ren'Py complexo
+    ignore_keywords = ["init", "define", "label", "class", "def", "store", "persistent", 
+                       "config.", "renpy.", "build.", "return", "import", "from", "screen", "menu"]
+    if any(stripped.startswith(k) for k in ignore_keywords):
+        return line
+
+    # Ignorar f-strings
+    if 'f"' in line or "f'" in line:
+        return line
+
+    # Regex para detectar strings entre aspas
+    text_match = re.findall(r'"(.*?)"|\'(.*?)\'', line)
+    if text_match:
+        new_line = line
+        for m in text_match:
+            original_text = m[0] or m[1]
+            if original_text.strip():
+                try:
+                    translated_text = translator.translate(original_text)
+                except Exception:
+                    translated_text = original_text
+                new_line = new_line.replace(f'"{original_text}"', f'"{translated_text}"')
+                new_line = new_line.replace(f"'{original_text}'", f"'{translated_text}'")
+        return new_line
+
+    return line
+
+def translate_file(src, lang="pt", overwrite_original=False):
+    os.makedirs(TL_DIR, exist_ok=True)
+    dst_lang = os.path.join(TL_DIR, os.path.relpath(src, GAME_DIR))
+    dst_original = src if overwrite_original else None
+
+    with open(src, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    translator = GoogleTranslator(source='auto', target=lang)
+    new_lines = []
+    for line in lines:
+        try:
+            new_lines.append(intelligent_translate_line(line, translator))
+        except Exception as e:
+            print(f"⚠ Erro na linha: {line.strip()} | {e}")
+            new_lines.append(line)
+
+    # Salva sobre original se necessário
+    if overwrite_original:
+        with open(dst_original, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+        print(f"✔ Traduzido sobre original: {os.path.relpath(dst_original, GAME_DIR)}")
+
+    # Salva na pasta de idioma
+    os.makedirs(os.path.dirname(dst_lang), exist_ok=True)
+    with open(dst_lang, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+    print(f"✔ Traduzido na pasta de idioma: {os.path.relpath(dst_lang, GAME_DIR)}")
+
+def safe_translate(lang="pt", overwrite_original=False):
     print(f"🌍 Traduzindo (modo seguro) para {lang}...")
     for root, _, files in os.walk(GAME_DIR):
         for f in files:
             if f.endswith(".rpy"):
                 src = os.path.join(root, f)
-                dst = os.path.join(GAME_DIR, f)  # sobrescreve direto
-                translate_file(src, dst, lang)
-    # Forçar PT-BR na inicialização
-    options_path = os.path.join(GAME_DIR, "options.rpy")
-    if os.path.exists(options_path):
-        with open(options_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        if 'config.language' not in content:
-            with open(options_path, "a", encoding="utf-8") as f:
-                f.write("\ninit python:\n    config.language = 'portuguese'  # PT-BR\n")
+                translate_file(src, lang, overwrite_original)
     print("✅ Tradução concluída sem crashes")
 
+# ---------------- MENU ---------------- #
 def help():
     print("""
 🆘 HELP / AJUDA
 - 1: Desproteger .rpa → .rpy
-- 2: Traduzir jogo direto para PT-BR
-- 3: Desproteger + Traduzir
-- 4: Restaurar backup
+- 2: Traduzir jogo direto para PT-BR (cria tl/portuguese/)
+- 3: Desproteger + Traduzir (cria tl/portuguese/)
+- 4: SOBREESCREVER os arquivos originais (bom para jogos que não aceitam tradução)
 - 0: Sair
 Notas:
-- Se o jogo não tiver .rpa, use apenas a opção 2.
-- Tradução sobrescreve os arquivos originais para forçar PT-BR.
 - Backup é criado automaticamente na primeira execução.
+- Tradução substitui arquivos originais se escolher opção 4.
+- Sistema traduz apenas strings/dialog, ignorando código crítico e f-strings.
 """)
 
-# ---------------- MENU ---------------- #
 def menu():
     while True:
         print("""
 🧰 REN'PY TOOLKIT FINAL
 
 1 - 🔓 Desproteger (.rpa)
-2 - 🌍 Traduzir
+2 - 🌍 Traduzir (cria tl/portuguese/)
 3 - ⚡ Desproteger + Traduzir
-4 - ♻ Restaurar backup
+4 - ⚡ SOBREESCREVER arquivos originais
 9 - 🆘 Help
 0 - ❌ Sair
 """)
@@ -119,12 +164,9 @@ def menu():
         if c == '0': break
         if c == '9': help()
         if c == '1': backup(); unprotect()
-        if c == '2':
-            backup()
-            safe_translate("pt")
-        if c == '3':
-            backup(); unprotect(); safe_translate("pt")
-        if c == '4': restore_backup()
+        if c == '2': backup(); safe_translate("pt", overwrite_original=False)
+        if c == '3': backup(); unprotect(); safe_translate("pt", overwrite_original=False)
+        if c == '4': backup(); safe_translate("pt", overwrite_original=True)
 
 # ---------------- EXECUÇÃO ---------------- #
 if __name__ == '__main__':
