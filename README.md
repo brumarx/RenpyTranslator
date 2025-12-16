@@ -19,17 +19,4 @@ Dentro da pasta do jogo (onde existe game/):
 
 python3 traduzir.py
 
-📂 Estrutura final correta (Ren’Py)
-
-Depois da tradução, você terá:
-
-game/
- ├─ script.rpy
- ├─ images.rpy
- ├─ ...
- └─ tl/
- └─ portuguese/
- ├─ script.rpy   ✅ traduzido
- ├─ events.rpy   ✅ traduzido
-
  Depois de traduzir, o que faço? nada — só jogar
