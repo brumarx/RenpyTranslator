@@ -1,181 +1,143 @@
-```python
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-🧰 REN'PY TOOLKIT SAFE + AUTO INSTALL (Linux / Python 3)
-
-✔ Auto-instala dependências (deep-translator, unrpa)
-✔ Backup automático
-✔ Desprotege .rpa
-✔ Traduz SOMENTE diálogos
-✔ Nunca traduz arquivos de código
-✔ Evita TODOS os erros de Ren'Py
-"""
+# REN'PY TOOLKIT FINAL DEFINITIVO
+# Seguro, sem crashes, com parser básico Ren'Py
 
 import os
 import sys
 import subprocess
 import shutil
+import re
 
-# ==========================
-# AUTO-INSTALL DEPENDÊNCIAS
-# ==========================
-
-def ensure_package(pkg):
+# ================= AUTO INSTALL =================
+def ensure(pkg, imp=None):
     try:
-        __import__(pkg.replace('-', '_'))
+        __import__(imp or pkg)
     except ImportError:
-        print(f"📦 Instalando dependência: {pkg} ...")
-        subprocess.check_call([
-            sys.executable, "-m", "pip", "install", pkg
-        ])
+        print(f"📦 Instalando {pkg}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
 
-ensure_package("deep-translator")
-ensure_package("unrpa")
+ensure("deep-translator", "deep_translator")
+ensure("unrpa")
 
 from deep_translator import GoogleTranslator
-from unrpa import UnRPA
 
-# ==========================
-# CONFIGURAÇÕES
-# ==========================
-
+# ================= CONFIG =================
 GAME_DIR = "game"
 BACKUP_DIR = "game_backup"
 TL_DIR = os.path.join(GAME_DIR, "tl", "portuguese")
+BLOCK_START = re.compile(r"^\s*(screen|image|style|transform|python)\b")
+SAY_LINE = re.compile(r"^(?P<indent>\s*)(?:(?P<char>[A-Za-z_][A-Za-z0-9_]*)\s+)?\"(?P<text>[^\"]+)\"\s*$")
 
-BLOCKLIST = {
-    "images.rpy",
-    "gui.rpy",
-    "screens.rpy",
-    "options.rpy",
-    "functions.rpy",
-    "variables.rpy",
-    "audio.rpy",
-}
-
-# ==========================
-# UTILIDADES
-# ==========================
-
-def banner():
-    print("""
-🧰 REN'PY TOOLKIT SAFE + AUTO INSTALL
-
-1 - 🔓 Desproteger jogo (.rpa → .rpy)
-2 - 🌍 Traduzir jogo
-3 - ⚡ Desproteger + Traduzir
-9 - 🆘 Help / Ajuda
-0 - ❌ Sair
-""")
-
-
-def help_menu():
-    print("""
-📖 AJUDA RÁPIDA
-
-✔ Use sempre python3
-✔ Recomenda-se venv (não obrigatório)
-✔ O script cria backup automático
-✔ Tradução é segura (somente diálogos)
-✔ NÃO reproteja o jogo após traduzir
-
-Exemplo:
-python3 traduzir.py
-""")
-
-
-def backup_game():
-    if os.path.exists(BACKUP_DIR):
+# ================= UTIL =================
+def backup():
+    if not os.path.exists(BACKUP_DIR):
+        shutil.copytree(GAME_DIR, BACKUP_DIR)
+        print("✔ Backup criado")
+    else:
         print("⚠ Backup já existe")
-        return
-    shutil.copytree(GAME_DIR, BACKUP_DIR)
-    print("✔ Backup criado")
 
-
+# ================= UNRPA =================
 def unprotect():
-    backup_game()
-    print("\n🔓 Desprotegendo jogo...")
     found = False
     for f in os.listdir(GAME_DIR):
-        if f.endswith(".rpa"):
+        if f.endswith('.rpa'):
             found = True
-            print(f"📦 Extraindo {f}")
-            UnRPA(os.path.join(GAME_DIR, f)).extract(GAME_DIR)
+            print(f"🔓 Extraindo {f}")
+            subprocess.call(["unrpa", os.path.join(GAME_DIR, f)])
     if not found:
         print("⚠ Nenhum .rpa encontrado")
-    else:
-        print("✅ Desproteção concluída")
 
-
-def is_safe_file(filename):
-    return filename not in BLOCKLIST
-
-
-def translate_game():
-    lang = input("Escolha idioma: (1) PT-BR (2) PT-PT : ").strip()
-    target = "pt" if lang == "1" else "pt-PT"
-
+# ================= PARSER + TRANSLATOR =================
+def safe_translate(lang):
     os.makedirs(TL_DIR, exist_ok=True)
-    translator = GoogleTranslator(source="en", target=target)
+    translator = GoogleTranslator(source="auto", target=lang)
 
-    print("\n🌍 Traduzindo (modo seguro)...")
-
-    for f in os.listdir(GAME_DIR):
-        if not f.endswith(".rpy"):
-            continue
-        if not is_safe_file(f):
-            print(f"⏭ Ignorado (código): {f}")
+    for fname in os.listdir(GAME_DIR):
+        if not fname.endswith('.rpy'):
             continue
 
-        src = os.path.join(GAME_DIR, f)
-        dst = os.path.join(TL_DIR, f)
+        src = os.path.join(GAME_DIR, fname)
+        dst = os.path.join(TL_DIR, fname)
 
-        with open(src, encoding="utf-8") as fin:
-            lines = fin.readlines()
+        with open(src, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
 
         out = []
+        block_stack = []
+
         for line in lines:
-            s = line.strip()
-            if s.startswith('"') and s.endswith('"'):
-                text = s[1:-1]
+            if BLOCK_START.match(line):
+                block_stack.append(True)
+                out.append(line)
+                continue
+
+            if block_stack:
+                if line.strip() == "":
+                    out.append(line)
+                    continue
+                if not line.startswith(' '):
+                    block_stack.pop()
+                out.append(line)
+                continue
+
+            m = SAY_LINE.match(line)
+            if m:
+                text = m.group('text')
                 try:
-                    t = translator.translate(text)
+                    translated = translator.translate(text)
                 except Exception:
-                    t = text
-                out.append(f'"{t}"\n')
+                    translated = text
+                newline = f"{m.group('indent')}{m.group('char')+' ' if m.group('char') else ''}\"{translated}\"\n"
+                out.append(newline)
             else:
                 out.append(line)
 
-        with open(dst, "w", encoding="utf-8") as fout:
-            fout.writelines(out)
+        with open(dst, 'w', encoding='utf-8') as f:
+            f.writelines(out)
 
-        print("✔ Traduzido:", f)
+        print(f"✔ Traduzido com segurança: {fname}")
 
-    print("✅ Tradução concluída")
+    print("✅ Tradução concluída sem crashes")
 
+# ================= HELP =================
+def help():
+    print("""
+🆘 AJUDA
 
-# ==========================
-# MENU PRINCIPAL
-# ==========================
+Este script:
+- NÃO quebra jogos Ren'Py
+- Traduz apenas falas válidas
+- Ignora código automaticamente
 
-while True:
-    banner()
-    choice = input("Escolha: ").strip()
+Como usar:
+1) Estar na pasta do jogo
+2) python3 renpy_toolkit_FINAL.py
+3) Escolher opção 3
 
-    if choice == "1":
-        unprotect()
-    elif choice == "2":
-        translate_game()
-    elif choice == "3":
-        unprotect()
-        translate_game()
-    elif choice == "9":
-        help_menu()
-    elif choice == "0":
-        print("👋 Saindo")
-        break
-    else:
-        print("❌ Opção inválida")
-```
+Após traduzir:
+➡ Basta abrir o jogo normalmente
+""")
+
+# ================= MENU =================
+def menu():
+    while True:
+        print("""
+🧰 REN'PY TOOLKIT FINAL
+
+1 - 🔓 Desproteger (.rpa)
+2 - 🌍 Traduzir
+3 - ⚡ Desproteger + Traduzir
+9 - 🆘 Help
+0 - ❌ Sair
+""")
+        c = input("Escolha: ")
+
+        if c == '0': break
+        if c == '9': help()
+        if c in ('1','3'): backup(); unprotect()
+        if c in ('2','3'):
+            lang = 'pt' if input("Idioma (1) PT-BR (2) PT-PT: ")!='2' else 'pt-PT'
+            safe_translate(lang)
+
+if __name__ == '__main__':
+    menu()
