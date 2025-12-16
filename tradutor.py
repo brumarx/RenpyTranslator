@@ -118,8 +118,46 @@ Após traduzir:
 ➡ Basta abrir o jogo normalmente
 """)
 
+# ================= RESTORE =================
+def restore_backup():
+    if not os.path.exists(BACKUP_DIR):
+        print("❌ Nenhum backup encontrado")
+        return
+    print("⚠ Isto irá apagar a pasta 'game' atual e restaurar o backup")
+    c = input("Confirmar restauração? (s/N): ").lower()
+    if c != 's':
+        print("❌ Cancelado")
+        return
+    if os.path.exists(GAME_DIR):
+        shutil.rmtree(GAME_DIR)
+    shutil.copytree(BACKUP_DIR, GAME_DIR)
+    print("✔ Backup restaurado com sucesso")
+
 # ================= MENU =================
 def menu():
+    while True:
+        print("""
+🧰 REN'PY TOOLKIT FINAL
+
+1 - 🔓 Desproteger (.rpa)
+2 - 🌍 Traduzir
+3 - ⚡ Desproteger + Traduzir
+4 - ♻ Restaurar backup original
+9 - 🆘 Help
+0 - ❌ Sair
+""")
+        c = input("Escolha: ")
+
+        if c == '0': break
+        if c == '9': help()
+        if c == '4': restore_backup()
+        if c in ('1','3'): backup(); unprotect()
+        if c in ('2','3'):
+            lang = 'pt' if input("Idioma (1) PT-BR (2) PT-PT: ")!='2' else 'pt-PT'
+            safe_translate(lang)
+
+if __name__ == '__main__':
+    menu():
     while True:
         print("""
 🧰 REN'PY TOOLKIT FINAL
