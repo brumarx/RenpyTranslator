@@ -1,0 +1,2 @@
+# RenpyTranslator
+Renpy Translator PT
