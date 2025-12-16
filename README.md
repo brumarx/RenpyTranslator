@@ -3,11 +3,10 @@ Renpy Translator PT
 
 Feito para linux
 
-Como usar (resumo rápido)
-python3 -m venv venv
-source venv/bin/activate
-pip install deep-translator unrpa
-python3 renpy_toolkit_safe.py
+Como usar (resumo rápido):
+1 - python3 -m venv venv
+2 - source venv/bin/activate
+3 - python3 tradutor.py
 
 Escolha:
 
@@ -29,6 +28,6 @@ game/
  ├─ images.rpy
  ├─ ...
  └─ tl/
-     └─ portuguese/
-         ├─ script.rpy   ✅ traduzido
-         ├─ events.rpy   ✅ traduzido
+ └─ portuguese/
+ ├─ script.rpy   ✅ traduzido
+ ├─ events.rpy   ✅ traduzido
