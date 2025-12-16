@@ -8,7 +8,7 @@ Como usar (resumo rápido):
 2 - source venv/bin/activate
 3 - python3 tradutor.py
 
-Escolha:
+Escolha Opção:
 
 3 - Desproteger + Traduzir
 
@@ -31,3 +31,5 @@ game/
  └─ portuguese/
  ├─ script.rpy   ✅ traduzido
  ├─ events.rpy   ✅ traduzido
+
+ Depois de traduzir, o que faço? nada — só jogar
