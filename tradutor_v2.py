@@ -56,33 +56,54 @@ def unprotect():
         unrpa.extract(os.path.join(GAME_DIR, f), GAME_DIR)
     print("✅ Desproteção concluída")
 
+# ---------------- RENPY SYNTAX FIX ---------------- #
+def fix_renpy_syntax(line):
+    """
+    Corrige comandos Ren'Py em português para inglês e vírgulas decimais.
+    """
+    replacements = {
+        "repita": "repeat",
+        "imagem": "image",
+        "Filme": "movie",
+        "pausa": "pause",
+        "com dissolver": "with dissolve",
+        "mostrar o texto": "show text",
+        "como": "as",
+        "outro:": "else:",
+        # Corrigir vírgulas decimais em floats
+    }
+
+    for k, v in replacements.items():
+        line = line.replace(k, v)
+
+    # Corrigir floats com vírgula (xpos, ypos)
+    line = re.sub(r"xpos\s*=\s*(\d),(\d)", r"xpos=\1.\2", line)
+    line = re.sub(r"ypos\s*=\s*(\d),(\d)", r"ypos=\1.\2", line)
+    return line
+
+# ---------------- TRADUÇÃO INTELIGENTE ---------------- #
 def intelligent_translate_line(line, translator):
     """
-    Decide se a linha deve ser traduzida ou mantida.
-    Mantém comandos Ren'Py, mas traduz qualquer string/dialog.
+    Traduz apenas strings/dialog, mantendo comandos Ren'Py intactos.
     """
+    original_line = line
+    line = fix_renpy_syntax(line)
+
     stripped = line.strip()
-    if not stripped:
-        return line  # linha vazia
-    # Ignorar linhas de comentário
-    if stripped.startswith("#"):
-        return line
-    # Regex para detectar strings entre aspas
-    text_match = re.findall(r'"(.*?)"|\'(.*?)\'', line)
-    if text_match:
-        new_line = line
-        for m in text_match:
-            original_text = m[0] or m[1]
-            if original_text.strip():
-                try:
-                    translated_text = translator.translate(original_text)
-                except Exception:
-                    translated_text = original_text
-                new_line = new_line.replace(f'"{original_text}"', f'"{translated_text}"')
-                new_line = new_line.replace(f"'{original_text}'", f"'{translated_text}'")
-        return new_line
-    # Tentar traduzir linhas de label, jump, menu, choice? (opcional)
-    # Por enquanto mantemos o resto intacto
+    if not stripped or stripped.startswith("#"):
+        return line  # Linha vazia ou comentário
+
+    # Detecta strings entre aspas
+    def translate_match(m):
+        text = m.group(1) or m.group(2)
+        if text.strip():
+            try:
+                return f'"{translator.translate(text)}"' if m.group(1) else f"'{translator.translate(text)}'"
+            except Exception:
+                return m.group(0)
+        return m.group(0)
+
+    line = re.sub(r'"(.*?)"|\'(.*?)\'', translate_match, line)
     return line
 
 def translate_file(src, dst, lang="pt"):
@@ -99,7 +120,7 @@ def translate_file(src, dst, lang="pt"):
             new_lines.append(line)
     with open(dst, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
-    print(f"✔ Traduzido com segurança: {os.path.relpath(dst, GAME_DIR)}")
+    print(f"✔ Traduzido: {os.path.relpath(dst, GAME_DIR)}")
 
 def safe_translate(lang="pt"):
     print(f"🌍 Traduzindo (modo seguro) para {lang}...")
@@ -107,14 +128,11 @@ def safe_translate(lang="pt"):
         for f in files:
             if f.endswith(".rpy"):
                 src = os.path.join(root, f)
-                # Se o jogo não tiver suporte a idiomas, grava sobre original
-                if "tl" in root.lower():
-                    dst = src
-                else:
-                    rel_path = os.path.relpath(src, GAME_DIR)
-                    dst = os.path.join(TL_DIR, rel_path)
+                rel_path = os.path.relpath(src, GAME_DIR)
+                dst = os.path.join(TL_DIR, rel_path)
                 translate_file(src, dst, lang)
-    # Forçar PT-BR no options.rpy
+
+    # Garantir PT-BR no options.rpy
     options_path = os.path.join(GAME_DIR, "options.rpy")
     if os.path.exists(options_path):
         with open(options_path, "r", encoding="utf-8") as f:
@@ -124,6 +142,7 @@ def safe_translate(lang="pt"):
                 f.write("\ninit python:\n    config.language = 'portuguese'  # PT-BR\n")
     print("✅ Tradução concluída sem crashes")
 
+# ---------------- HELP ---------------- #
 def help():
     print("""
 🆘 HELP / AJUDA
@@ -135,7 +154,7 @@ def help():
 Notas:
 - Backup é criado automaticamente na primeira execução.
 - Tradução cria tl/portuguese/ se não existir.
-- Sistema traduz apenas strings/dialog de forma inteligente, mantendo comandos Ren'Py.
+- Sistema traduz apenas strings/dialog, mantendo comandos Ren'Py corretos.
 """)
 
 # ---------------- MENU ---------------- #
