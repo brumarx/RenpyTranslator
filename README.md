@@ -4,6 +4,7 @@ Renpy Translator PT
 Feito para linux
 
 Como usar (resumo rápido):
+
 1 - python3 -m venv venv
 2 - source venv/bin/activate
 3 - python3 tradutor.py
